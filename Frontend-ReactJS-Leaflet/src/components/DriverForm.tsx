@@ -6,8 +6,8 @@ import { MapContainer, TileLayer, Marker, useMapEvents } from "react-leaflet";
 import "../styles/Form.css";
 import { addDriver } from "../services/api";
 import { toast, ToastContainer } from "react-toastify";
-import "react-toastify/dist/ReactToastify.css";
-import { Driver } from "../types";
+import "react-toastify/dist/ReactToastify.css"; 
+import { Navigate, useNavigate } from "react-router";
 
 const LocationPicker = ({
   onSelect,
@@ -56,6 +56,7 @@ const DriverForm = () => {
     };
     
     try {
+      
       // save to backend
        const savedDriver = await addDriver(newDriver);
 

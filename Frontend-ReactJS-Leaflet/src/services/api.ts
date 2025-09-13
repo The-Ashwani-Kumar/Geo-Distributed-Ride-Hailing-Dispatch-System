@@ -1,6 +1,7 @@
 // src/services/api.ts
 import axios, { AxiosError } from "axios";
 import { Driver, Passenger, Ride } from "../types";
+import { consistencyManager } from "./consistencyManager";
 
 const API_URL = "http://localhost:8080";
 
@@ -10,6 +11,19 @@ const api = axios.create({
     "Content-Type": "application/json",
   },
 });
+
+// Request interceptor to add consistency header
+api.interceptors.request.use(
+  (config) => {
+    const level = consistencyManager.get();
+    // Attach the header to all requests
+    config.headers["X-Consistency-Level"] = level;
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
 
 // Interceptor for global error handling
 api.interceptors.response.use(

@@ -1,17 +1,49 @@
 import React, { useState } from "react";
-import { Button, Modal, Offcanvas } from "react-bootstrap";
+import { Button, Form, Modal, Offcanvas } from "react-bootstrap";
+import { useRideContext } from "../context/RideContext";
 import DriverForm from "./DriverForm";
 import PassengerForm from "./PassengerForm";
 import RideList from "./RideList";
 import RandomUserGenerator from "./RandomUserGenerator";
 
 const SideBar = () => {
+  const {
+    consistencyLevel,
+    setConsistencyLevel
+  } = useRideContext();
   const [showDriver, setShowDriver] = useState(false);
   const [showPassenger, setShowPassenger] = useState(false);
   const [showRides, setShowRides] = useState(false);
 
   // For mobile drawer
   const [showMenu, setShowMenu] = useState(false);
+
+  const consistencyToggle = (
+    <div className="p-2 rounded bg-light border mt-4">
+      <Form.Check
+        type="switch"
+        id="consistency-switch"
+        label={
+          <div className="ms-2">
+            <strong className="d-block">
+              {consistencyLevel === "strong"
+                ? "Strong Consistency"
+                : "Eventual Consistency"}
+            </strong>
+            <small className="text-muted">
+              {consistencyLevel === "strong"
+                ? "Slower, guaranteed reads"
+                : "Faster, risk of stale data"}
+            </small>
+          </div>
+        }
+        checked={consistencyLevel === "strong"}
+        onChange={(e) => {
+          setConsistencyLevel(e.target.checked ? "strong" : "eventual");
+        }}
+      />
+    </div>
+  );
 
   return (
     <>
@@ -46,9 +78,14 @@ const SideBar = () => {
           onClick={() => setShowRides(true)}
         >
           <i className="bi bi-people me-2"></i>
-          Ongoing Rides
+          All Rides
         </Button>
-        <RandomUserGenerator/>
+
+        {consistencyToggle}
+
+        <div className="mt-auto w-100">
+          <RandomUserGenerator />
+        </div>
       </div>
 
       {/* Mobile Topbar (fixed at top) */}
@@ -105,9 +142,14 @@ const SideBar = () => {
             }}
           >
             <i className="bi bi-people me-2"></i>
-            Ongoing Rides
+            All Rides
           </Button>
-          <RandomUserGenerator/>
+
+          {consistencyToggle}
+
+          <div className="mt-auto w-100">
+            <RandomUserGenerator />
+          </div>
         </Offcanvas.Body>
       </Offcanvas>
 
@@ -135,7 +177,7 @@ const SideBar = () => {
         </Modal.Body>
       </Modal>
 
-      {/* Ongoing Rides Modal */}
+      {/* All Rides Modal */}
       <Modal
         show={showRides}
         onHide={() => setShowRides(false)}
@@ -143,7 +185,7 @@ const SideBar = () => {
         centered
       >
         <Modal.Header closeButton>
-          <Modal.Title>Ongoing Rides</Modal.Title>
+          <Modal.Title>All Rides</Modal.Title>
         </Modal.Header>
         <Modal.Body>
           <RideList />

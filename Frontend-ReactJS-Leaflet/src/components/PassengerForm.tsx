@@ -1,10 +1,10 @@
 // src/components/PassengerForm.tsx
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useRideContext } from "../context/RideContext";
 import { Button, Form, Spinner } from "react-bootstrap";
 import { MapContainer, TileLayer, Marker, useMapEvents } from "react-leaflet";
 import "../styles/Form.css";
-import { addPassenger } from "../services/api";
+import { addPassenger, getPassengers } from "../services/api";
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
@@ -40,6 +40,20 @@ const PassengerForm = () => {
       : null
   );
   const [loading, setLoading] = useState(false);
+
+  // Fetch data from the server
+    const fetchData = async () => {
+      try {
+        const fetchedPassengers = await getPassengers();
+        setPassengers(fetchedPassengers);
+      } catch (err) {
+        toast.error("Failed to fetch data from the server.");
+      }
+    };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

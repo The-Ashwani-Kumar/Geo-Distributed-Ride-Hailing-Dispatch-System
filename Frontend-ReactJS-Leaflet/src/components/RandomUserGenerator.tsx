@@ -98,6 +98,10 @@ const RandomUserGenerator: React.FC = () => {
       console.error(err);
       toast.error("Error adding Random Drivers and Passengers");
     }
+    finally{
+      setDrivers((prev) => [...prev, ...newDrivers]);
+      setPassengers((prev) => [...prev, ...newPassengers]);
+    }
   };
 
   return (

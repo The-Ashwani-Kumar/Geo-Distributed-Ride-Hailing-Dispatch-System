@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { getRides, endRide } from "../services/api";
+import { getDrivers, getPassengers, getRides, endRide } from "../services/api";
 import { useRideContext } from "../context/RideContext";
 import "bootstrap-icons/font/bootstrap-icons.css";
 
@@ -7,7 +7,8 @@ import { Ride } from "../types";
 import { toast, ToastContainer } from "react-toastify";
 
 const RideList: React.FC = () => {
-  const { rides, setRides } = useRideContext();
+  const { rides, setDrivers, setPassengers, setRides } =
+    useRideContext();
   const [loading, setLoading] = useState(false);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
@@ -15,10 +16,15 @@ const RideList: React.FC = () => {
   const fetchRides = async () => {
     setLoading(true);
     try {
-      const response = await getRides();
-      setRides(response);
+      const fetchedDrivers = await getDrivers();
+      const fetchedPassengers = await getPassengers();
+      const fetchedRides = await getRides();
+
+      setPassengers(fetchedPassengers);
+      setRides(fetchedRides);
+      setDrivers(fetchedDrivers);
     } catch (err) {
-      console.error("Error fetching rides:", err);
+      toast.error("Failed to fetch data from the server.");
     }
     setLoading(false);
   };
@@ -33,13 +39,8 @@ const RideList: React.FC = () => {
   const handleEndRide = async (rideId: string) => {
     try {
       await endRide(rideId);
-      setRides(
-        rides.map((r) =>
-          r.id === rideId
-            ? { ...r, status: "completed", endTime: Date.now() }
-            : r
-        )
-      );
+      toast.success("Ride ended");
+      fetchRides();
     } catch (err) {
       console.error("Error ending ride:", err);
     }
@@ -76,7 +77,6 @@ const RideList: React.FC = () => {
         draggable
         pauseOnHover
       />
-      <h4 className="mb-3">Ongoing Rides</h4>
 
       {/* Scrollable table container */}
       <div
