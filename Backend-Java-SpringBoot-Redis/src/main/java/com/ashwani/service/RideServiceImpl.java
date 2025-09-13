@@ -1,5 +1,6 @@
 package com.ashwani.service;
 
+import com.ashwani.config.ConsistencyContext;
 import com.ashwani.entity.Driver;
 import com.ashwani.entity.Passenger;
 import com.ashwani.entity.Ride;
@@ -15,12 +16,16 @@ import org.springframework.data.geo.GeoResult;
 import org.springframework.data.geo.GeoResults;
 import org.springframework.data.redis.connection.RedisGeoCommands.GeoLocation;
 import org.springframework.stereotype.Service;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.UUID;
 
 @Service
 public class RideServiceImpl implements RideService{
+
+    private static final Logger logger = LoggerFactory.getLogger(RideServiceImpl.class);
 
     @Autowired
     private RideRepository rideRepository;
@@ -31,11 +36,14 @@ public class RideServiceImpl implements RideService{
     @Autowired
     private DriverRepository driverRepository;
 
-    @Override
+        @Override
     public Ride bookRide(String passengerId) {
-        System.out.println("Booking ride for passenger ID: " + passengerId);
+        logger.info("Booking ride for passenger ID: {}", passengerId);
+        String consistency = ConsistencyContext.getConsistencyLevel();
+        logger.info("Consistency level for booking: {}", consistency);
+
         // 1. Get passenger from repository
-        Passenger passenger = passengerRepository.findPassengerById(passengerId);
+        Passenger passenger = passengerRepository.findById(passengerId, consistency);
         if (passenger == null) {
             throw new PassengerNotFoundException("Passenger not found with ID: " + passengerId);
         }
@@ -47,7 +55,11 @@ public class RideServiceImpl implements RideService{
         Double lon = passenger.getLongitude();
 
         // 2. Find nearby drivers (sorted by distance)
-        GeoResults<GeoLocation<String>> nearbyDrivers = rideRepository.getNearByDrivers(lat, lon);
+        // Always use strong consistency for booking to ensure up-to-date driver availability
+        logger.info("Searching for nearby drivers at lat: {}, lon: {} with strong consistency", lat, lon);
+        GeoResults<GeoLocation<String>> nearbyDrivers = rideRepository.getNearByDrivers(lat, lon, "strong");
+        logger.info("Found {} nearby drivers.", nearbyDrivers != null ? nearbyDrivers.getContent().size() : 0);
+
         if (nearbyDrivers == null || nearbyDrivers.getContent().isEmpty()) {
             throw new RideNotFoundException("Sorry, No drivers nearby!");
         }
@@ -57,11 +69,19 @@ public class RideServiceImpl implements RideService{
         // 3. Iterate through drivers and pick the first available
         for (GeoResult<GeoLocation<String>> geoResult : nearbyDrivers) {
             String driverId = geoResult.getContent().getName();
+            logger.info("Checking driver ID: {}", driverId);
 
-            Driver driver = driverRepository.findDriverById(driverId); // fetch from hash
-            if (driver != null && "available".equalsIgnoreCase(driver.getStatus())) {
-                nearestDriverId = driver.getId();
-                break;
+            // Always use strong consistency for booking to ensure up-to-date driver status
+            Driver driver = driverRepository.findDriverById(driverId, "strong"); // fetch from hash
+            if (driver != null) {
+                logger.info("Driver {} status: {}", driverId, driver.getStatus());
+                if ("available".equalsIgnoreCase(driver.getStatus())) {
+                    nearestDriverId = driver.getId();
+                    logger.info("Found available driver: {}", nearestDriverId);
+                    break;
+                }
+            } else {
+                logger.warn("Driver {} found in GEO index but not in hash. Skipping.", driverId);
             }
         }
 
@@ -79,10 +99,10 @@ public class RideServiceImpl implements RideService{
 
         // Update passenger status -> on_ride
         passenger.setStatus("on_ride");
-        passengerRepository.savePassenger(passenger);
+        passengerRepository.save(passenger);
 
         // Save ride in Redis
-        rideRepository.bookRide(ride);
+        rideRepository.save(ride);
 
         // 5. Update driver status -> on_ride
         rideRepository.updateDriverStatus(nearestDriverId, "on_ride");
@@ -93,7 +113,8 @@ public class RideServiceImpl implements RideService{
 
     @Override
     public Ride endRide(String rideId) {
-        Ride ride = (Ride) rideRepository.findRideById(rideId);
+        String consistency = ConsistencyContext.getConsistencyLevel();
+        Ride ride = rideRepository.findById(rideId, consistency);
         if (ride == null){
             throw new RideNotFoundException("Ride not found with ID: " + rideId);
         }
@@ -103,13 +124,13 @@ public class RideServiceImpl implements RideService{
 
         ride.setStatus("completed");
         ride.setEndTime(System.currentTimeMillis());
-        rideRepository.endRide(rideId, ride);
+        rideRepository.save(ride);
 
         // Free up passenger
-        Passenger passenger = passengerRepository.findPassengerById(ride.getPassengerId());
+        Passenger passenger = passengerRepository.findById(ride.getPassengerId(), consistency);
         if (passenger != null) {
             passenger.setStatus("online");
-            passengerRepository.savePassenger(passenger);
+            passengerRepository.save(passenger);
         }
 
         // Free up driver
@@ -120,6 +141,7 @@ public class RideServiceImpl implements RideService{
 
     @Override
     public List<Ride> getAllRides() {
-        return rideRepository.findAllRides();
+        String consistency = ConsistencyContext.getConsistencyLevel();
+        return rideRepository.findAll(consistency);
     }
 }

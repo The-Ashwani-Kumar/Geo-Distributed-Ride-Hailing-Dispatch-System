@@ -1,9 +1,8 @@
 package com.ashwani.repository;
 
-import com.ashwani.config.RedisConfig;
 import com.ashwani.entity.Driver;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.geo.Point;
-import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.core.GeoOperations;
 import org.springframework.data.redis.core.HashOperations;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -17,43 +16,57 @@ import static com.ashwani.constant.ApplicationConstant.DRIVER_KEY;
 @Repository
 public class DriverRepository {
 
-    private final HashOperations<String, String, Driver> hashOps;
-    private final GeoOperations<String, String> geoOps;
-
-    public DriverRepository(RedisConnectionFactory factory) {
-
-        // Create generic templates using RedisConfig
-        RedisConfig redisConfig = new RedisConfig();
-        RedisTemplate<String, Driver> driverTemplate = redisConfig.createTemplate(factory, Driver.class);
-        RedisTemplate<String, String> geoTemplate = redisConfig.createGeoTemplate(factory);
-
-        this.hashOps = driverTemplate.opsForHash();
-        this.geoOps = geoTemplate.opsForGeo();
-    }
+    private final HashOperations<String, String, Driver> masterHashOps;
+    private final GeoOperations<String, String> masterGeoOps;
+    private final HashOperations<String, String, Driver> replicaHashOps;
+    private final GeoOperations<String, String> replicaGeoOps;
 
     public void saveDriver(Driver driver) {
-        hashOps.put(DRIVER_KEY, driver.getId(), driver);
-        geoOps.add(DRIVER_GEO_KEY,
+        masterHashOps.put(DRIVER_KEY, driver.getId(), driver);
+        masterGeoOps.add(DRIVER_GEO_KEY,
                 new Point(driver.getLongitude(), driver.getLatitude()),
                 driver.getId());
     }
 
-    public Driver findDriverById(String driverId) {
-        return hashOps.get(DRIVER_KEY, driverId);
+    public DriverRepository(@Qualifier("masterDriverRedisTemplate") RedisTemplate<String, Driver> masterDriverRedisTemplate,
+                            @Qualifier("replicaDriverRedisTemplate") RedisTemplate<String, Driver> replicaDriverRedisTemplate,
+                            @Qualifier("masterGeoRedisTemplate") RedisTemplate<String, String> masterGeoRedisTemplate,
+                            @Qualifier("replicaGeoRedisTemplate") RedisTemplate<String, String> replicaGeoRedisTemplate) {
+        this.masterHashOps = masterDriverRedisTemplate.opsForHash();
+        this.masterGeoOps = masterGeoRedisTemplate.opsForGeo();
+        this.replicaHashOps = replicaDriverRedisTemplate.opsForHash();
+        this.replicaGeoOps = replicaGeoRedisTemplate.opsForGeo();
     }
 
-    public void updateDriverLocation(String driverId, Double longitude, Double latitude) {
-        geoOps.add(DRIVER_GEO_KEY, new Point(longitude, latitude), driverId);
-
-        Driver driver = hashOps.get(DRIVER_KEY, driverId);
-        if (driver != null) {
-            driver.setLongitude(longitude);
-            driver.setLatitude(latitude);
-            hashOps.put(DRIVER_KEY, driverId, driver);
+    public Driver findDriverById(String driverId, String consistency) {
+        if ("strong".equalsIgnoreCase(consistency)) {
+            return masterHashOps.get(DRIVER_KEY, driverId);
+        } else {
+            return replicaHashOps.get(DRIVER_KEY, driverId);
         }
     }
 
-    public List<Driver> findAllDrivers() {
-        return List.copyOf(hashOps.values(DRIVER_KEY));
+
+    public void updateDriverLocation(String driverId, Double longitude, Double latitude) {
+        masterGeoOps.add(DRIVER_GEO_KEY, new Point(longitude, latitude), driverId);
+
+        Driver driver = (Driver) masterHashOps.get(DRIVER_KEY, driverId);
+        if (driver != null) {
+            driver.setLongitude(longitude);
+            driver.setLatitude(latitude);
+            masterHashOps.put(DRIVER_KEY, driverId, driver);
+        }
+    }
+
+    public List<Driver> findAllDrivers(String consistency) {
+        if ("strong".equalsIgnoreCase(consistency)) {
+            return masterHashOps.values(DRIVER_KEY).stream().toList();
+        } else {
+            return replicaHashOps.values(DRIVER_KEY).stream().toList();
+        }
+    }
+
+    public void removeDriverFromGeoIndex(String driverId) {
+        masterGeoOps.remove(DRIVER_GEO_KEY, driverId);
     }
 }

@@ -5,4 +5,6 @@ public class ApplicationConstant {
     public static final String DRIVER_KEY = "drivers"; // Redis hash key
     public static final String PASSENGER_KEY = "passengers"; // Redis hash key
     public static final String RIDE_KEY = "rides"; // Redis hash key
+    public static final String CONSISTENCY_HEADER = "X-Consistency-Level";
+    public static final String DEFAULT_CONSISTENCY = "strong";
 }

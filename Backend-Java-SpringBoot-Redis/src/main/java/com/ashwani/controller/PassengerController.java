@@ -1,7 +1,6 @@
 package com.ashwani.controller;
 
 import com.ashwani.entity.Passenger;
-import com.ashwani.repository.PassengerRepository;
 import com.ashwani.service.PassengerService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;

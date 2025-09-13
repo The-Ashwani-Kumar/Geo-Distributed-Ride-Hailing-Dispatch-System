@@ -1,8 +1,7 @@
 package com.ashwani.repository;
 
-import com.ashwani.config.RedisConfig;
 import com.ashwani.entity.Passenger;
-import org.springframework.data.redis.connection.RedisConnectionFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.redis.core.HashOperations;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Repository;
@@ -14,33 +13,38 @@ import static com.ashwani.constant.ApplicationConstant.PASSENGER_KEY;
 @Repository
 public class PassengerRepository {
 
-    private final HashOperations<String, String, Passenger> hashOps;
+    private final HashOperations<String, String, Passenger> masterHashOps;
+    private final HashOperations<String, String, Passenger> replicaHashOps;
 
-    public PassengerRepository(RedisConnectionFactory factory) {
-
-        // Create generic RedisTemplate for Passenger
-        RedisConfig redisConfig = new RedisConfig();
-        RedisTemplate<String, Passenger> passengerTemplate = redisConfig.createTemplate(factory, Passenger.class);
-        this.hashOps = passengerTemplate.opsForHash();
+    public PassengerRepository(@Qualifier("masterPassengerRedisTemplate") RedisTemplate<String, Passenger> masterPassengerRedisTemplate,
+                               @Qualifier("replicaPassengerRedisTemplate") RedisTemplate<String, Passenger> replicaPassengerRedisTemplate) {
+        this.masterHashOps = masterPassengerRedisTemplate.opsForHash();
+        this.replicaHashOps = replicaPassengerRedisTemplate.opsForHash();
     }
 
-    // Save a passenger
-    public void savePassenger(Passenger passenger) {
-        hashOps.put(PASSENGER_KEY, passenger.getId(), passenger);
+    public void save(Passenger passenger) {
+        masterHashOps.put(PASSENGER_KEY, passenger.getId(), passenger);
     }
 
-    // Find a passenger by ID
-    public Passenger findPassengerById(String id) {
-        return hashOps.get(PASSENGER_KEY, id);
+
+    public Passenger findById(String id, String consistency) {
+        if ("strong".equalsIgnoreCase(consistency)) {
+            return masterHashOps.get(PASSENGER_KEY, id);
+        } else {
+            return replicaHashOps.get(PASSENGER_KEY, id);
+        }
     }
 
-    // Get all passengers
-    public List<Passenger> getAllPassengers() {
-        return List.copyOf(hashOps.values(PASSENGER_KEY));
+    public List<Passenger> findAll(String consistency) {
+        if ("strong".equalsIgnoreCase(consistency)) {
+            return masterHashOps.values(PASSENGER_KEY).stream().toList();
+        } else {
+            return replicaHashOps.values(PASSENGER_KEY).stream().toList();
+        }
     }
 
-    // Optional: delete a passenger
-    public void deletePassenger(String id) {
-        hashOps.delete(PASSENGER_KEY, id);
+
+    public void delete(String id) {
+        masterHashOps.delete(PASSENGER_KEY, id);
     }
 }

@@ -1,15 +1,16 @@
 package com.ashwani.repository;
 
-import com.ashwani.config.RedisConfig;
 import com.ashwani.entity.Driver;
 import com.ashwani.entity.Ride;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.geo.*;
-import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.connection.RedisGeoCommands.GeoLocation;
 import org.springframework.data.redis.core.GeoOperations;
 import org.springframework.data.redis.core.HashOperations;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Repository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.List;
 
@@ -18,59 +19,74 @@ import static com.ashwani.constant.ApplicationConstant.*;
 @Repository
 public class RideRepository {
 
-    private final HashOperations<String, String, Ride> rideHashOps;
-    private final HashOperations<String, String, Driver> driverHashOps;
-    private final GeoOperations<String, String> geoOps;
+    private static final Logger logger = LoggerFactory.getLogger(RideRepository.class);
 
-    public RideRepository(RedisConnectionFactory factory) {
+    private final HashOperations<String, String, Ride> masterRideHashOps;
+    private final HashOperations<String, String, Ride> replicaRideHashOps;
+    private final HashOperations<String, String, Driver> masterDriverHashOps;
+    private final GeoOperations<String, String> masterGeoOps;
+    private final GeoOperations<String, String> replicaGeoOps;
 
-        RedisConfig redisConfig = new RedisConfig();
-
-        // Typed RedisTemplates
-        RedisTemplate<String, Ride> rideTemplate = redisConfig.createTemplate(factory, Ride.class);
-        RedisTemplate<String, Driver> driverTemplate = redisConfig.createTemplate(factory, Driver.class);
-        RedisTemplate<String, String> geoTemplate = redisConfig.createGeoTemplate(factory);
-
-        this.rideHashOps = rideTemplate.opsForHash();
-        this.driverHashOps = driverTemplate.opsForHash();
-        this.geoOps = geoTemplate.opsForGeo();
+    public RideRepository(@Qualifier("masterRideRedisTemplate") RedisTemplate<String, Ride> masterRideRedisTemplate,
+                          @Qualifier("replicaRideRedisTemplate") RedisTemplate<String, Ride> replicaRideRedisTemplate,
+                          @Qualifier("masterDriverRedisTemplate") RedisTemplate<String, Driver> masterDriverRedisTemplate,
+                          @Qualifier("masterGeoRedisTemplate") RedisTemplate<String, String> masterGeoRedisTemplate,
+                          @Qualifier("replicaGeoRedisTemplate") RedisTemplate<String, String> replicaGeoRedisTemplate) {
+        this.masterRideHashOps = masterRideRedisTemplate.opsForHash();
+        this.replicaRideHashOps = replicaRideRedisTemplate.opsForHash();
+        this.masterDriverHashOps = masterDriverRedisTemplate.opsForHash();
+        this.masterGeoOps = masterGeoRedisTemplate.opsForGeo();
+        this.replicaGeoOps = replicaGeoRedisTemplate.opsForGeo();
     }
 
-    // Book a new ride
-    public void bookRide(Ride ride) {
-        rideHashOps.put(RIDE_KEY, ride.getId(), ride);
+    public void save(Ride ride) {
+        masterRideHashOps.put(RIDE_KEY, ride.getId(), ride);
     }
 
-    // Update driver status
     public void updateDriverStatus(String driverId, String status) {
-        Driver driver = driverHashOps.get(DRIVER_KEY, driverId);
+        Driver driver = masterDriverHashOps.get(DRIVER_KEY, driverId);
         if (driver != null) {
             driver.setStatus(status);
-            driverHashOps.put(DRIVER_KEY, driverId, driver);
+            masterDriverHashOps.put(DRIVER_KEY, driverId, driver);
+            if ("available".equalsIgnoreCase(status)) {
+                masterGeoOps.add(DRIVER_GEO_KEY, new Point(driver.getLongitude(), driver.getLatitude()), driver.getId());
+                logger.info("Driver {} re-added to GEO index with location ({}, {})", driverId, driver.getLongitude(), driver.getLatitude());
+            }
         }
     }
 
-    // Get all rides
-    public List<Ride> findAllRides() {
-        return rideHashOps.values(RIDE_KEY);
+    public List<Ride> findAll(String consistency) {
+        if ("strong".equalsIgnoreCase(consistency)) {
+            logger.info("Fetching all rides with STRONG consistency (from master)");
+            return masterRideHashOps.values(RIDE_KEY).stream().toList();
+        } else {
+            logger.info("Fetching all rides with EVENTUAL consistency (from replica)");
+            return replicaRideHashOps.values(RIDE_KEY).stream().toList();
+        }
     }
 
-    // Find ride by ID
-    public Ride findRideById(String id) {
-        return rideHashOps.get(RIDE_KEY, id);
+    public Ride findById(String id, String consistency) {
+        if ("strong".equalsIgnoreCase(consistency)) {
+            logger.info("Fetching ride {} with STRONG consistency (from master)", id);
+            return masterRideHashOps.get(RIDE_KEY, id);
+        } else {
+            logger.info("Fetching ride {} with EVENTUAL consistency (from replica)", id);
+            return replicaRideHashOps.get(RIDE_KEY, id);
+        }
     }
 
-    // End a ride (update ride info)
-    public void endRide(String rideId, Ride ride) {
-        rideHashOps.put(RIDE_KEY, rideId, ride);
-    }
-
-    // Get nearby drivers within 5 km radius
-    public GeoResults<GeoLocation<String>> getNearByDrivers(Double lat, Double lon) {
+    public GeoResults<GeoLocation<String>> getNearByDrivers(Double lat, Double lon, String consistency) {
+        GeoOperations<String, String> geoOps;
+        if ("strong".equalsIgnoreCase(consistency)) {
+            logger.info("Searching for nearby drivers with STRONG consistency (from master)");
+            geoOps = masterGeoOps;
+        } else {
+            logger.info("Searching for nearby drivers with EVENTUAL consistency (from replica)");
+            geoOps = replicaGeoOps;
+        }
         return geoOps.radius(
                 DRIVER_GEO_KEY,
-                new Circle(new Point(lon, lat), new Distance(5, Metrics.KILOMETERS))
+                new Circle(new Point(lon, lat), new Distance(50, Metrics.KILOMETERS))
         );
     }
-
 }

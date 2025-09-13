@@ -5,7 +5,11 @@ import com.ashwani.entity.Ride;
 import java.util.List;
 
 public interface RideService {
-    Ride bookRide(String id);
-    Ride endRide(String id);
+
+    Ride bookRide(String passengerId);
+
+    Ride endRide(String rideId);
+
     List<Ride> getAllRides();
 }
+
