@@ -1,9 +1,13 @@
 package com.ashwani.service;
 
-import com.ashwani.config.ConsistencyContext;
 import com.ashwani.entity.Driver;
 import com.ashwani.entity.Passenger;
 import com.ashwani.entity.Ride;
+import com.ashwani.enums.ConsistencyLevel;
+import com.ashwani.enums.DriverStatus;
+import com.ashwani.enums.PassengerStatus;
+import com.ashwani.enums.Region;
+import com.ashwani.enums.RideStatus;
 import com.ashwani.exception.AlreadyExistsException;
 import com.ashwani.exception.NotFoundException;
 import com.ashwani.exception.PassengerNotFoundException;
@@ -11,19 +15,21 @@ import com.ashwani.exception.RideNotFoundException;
 import com.ashwani.repository.DriverRepository;
 import com.ashwani.repository.PassengerRepository;
 import com.ashwani.repository.RideRepository;
+import com.ashwani.sharding.ConsistencyContext;
+import com.ashwani.sharding.RegionContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.geo.GeoResult;
 import org.springframework.data.geo.GeoResults;
 import org.springframework.data.redis.connection.RedisGeoCommands.GeoLocation;
 import org.springframework.stereotype.Service;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.UUID;
 
 @Service
-public class RideServiceImpl implements RideService{
+public class RideServiceImpl implements RideService {
 
     private static final Logger logger = LoggerFactory.getLogger(RideServiceImpl.class);
 
@@ -36,28 +42,25 @@ public class RideServiceImpl implements RideService{
     @Autowired
     private DriverRepository driverRepository;
 
-        @Override
-    public Ride bookRide(String passengerId) {
-        logger.info("Booking ride for passenger ID: {}", passengerId);
-        String consistency = ConsistencyContext.getConsistencyLevel();
-        logger.info("Consistency level for booking: {}", consistency);
+    @Override
+    public Ride bookRide(Region region, String passengerId) {
+        logger.info("Booking ride for passenger ID: {} in region {}", passengerId, region);
+        // Write operations should always use STRONG consistency.
+        ConsistencyLevel consistency = ConsistencyLevel.STRONG;
 
-        // 1. Get passenger from repository
-        Passenger passenger = passengerRepository.findById(passengerId, consistency);
+        Passenger passenger = passengerRepository.findById(region, passengerId, consistency);
         if (passenger == null) {
             throw new PassengerNotFoundException("Passenger not found with ID: " + passengerId);
         }
-        if(passenger.getStatus().equals("on_ride")){
+        if (PassengerStatus.ON_RIDE.equals(passenger.getStatus())) {
             throw new AlreadyExistsException("Passenger is already on a ride");
         }
 
         Double lat = passenger.getLatitude();
         Double lon = passenger.getLongitude();
 
-        // 2. Find nearby drivers (sorted by distance)
-        // Always use strong consistency for booking to ensure up-to-date driver availability
-        logger.info("Searching for nearby drivers at lat: {}, lon: {} with strong consistency", lat, lon);
-        GeoResults<GeoLocation<String>> nearbyDrivers = rideRepository.getNearByDrivers(lat, lon, "strong");
+        logger.info("Searching for nearby drivers at lat: {}, lon: {} with strong consistency in region {}", lat, lon, region);
+        GeoResults<GeoLocation<String>> nearbyDrivers = rideRepository.getNearByDrivers(region, lat, lon, ConsistencyLevel.STRONG);
         logger.info("Found {} nearby drivers.", nearbyDrivers != null ? nearbyDrivers.getContent().size() : 0);
 
         if (nearbyDrivers == null || nearbyDrivers.getContent().isEmpty()) {
@@ -66,16 +69,14 @@ public class RideServiceImpl implements RideService{
 
         String nearestDriverId = null;
 
-        // 3. Iterate through drivers and pick the first available
         for (GeoResult<GeoLocation<String>> geoResult : nearbyDrivers) {
             String driverId = geoResult.getContent().getName();
             logger.info("Checking driver ID: {}", driverId);
 
-            // Always use strong consistency for booking to ensure up-to-date driver status
-            Driver driver = driverRepository.findDriverById(driverId, "strong"); // fetch from hash
+            Driver driver = driverRepository.findDriverById(region, driverId, ConsistencyLevel.STRONG);
             if (driver != null) {
                 logger.info("Driver {} status: {}", driverId, driver.getStatus());
-                if ("available".equalsIgnoreCase(driver.getStatus())) {
+                if (DriverStatus.AVAILABLE.equals(driver.getStatus())) {
                     nearestDriverId = driver.getId();
                     logger.info("Found available driver: {}", nearestDriverId);
                     break;
@@ -89,59 +90,54 @@ public class RideServiceImpl implements RideService{
             throw new NotFoundException("Sorry, No AVAILABLE drivers nearby!");
         }
 
-        // 4. Create and save ride object
         Ride ride = new Ride();
         ride.setId(UUID.randomUUID().toString());
         ride.setPassengerId(passengerId);
         ride.setDriverId(nearestDriverId);
-        ride.setStatus("ongoing");
+        ride.setStatus(RideStatus.ONGOING);
         ride.setStartTime(System.currentTimeMillis());
 
-        // Update passenger status -> on_ride
-        passenger.setStatus("on_ride");
-        passengerRepository.save(passenger);
-
-        // Save ride in Redis
-        rideRepository.save(ride);
-
-        // 5. Update driver status -> on_ride
-        rideRepository.updateDriverStatus(nearestDriverId, "on_ride");
+        passengerRepository.updatePassengerStatus(region, passengerId, PassengerStatus.ON_RIDE);
+        rideRepository.save(region, ride);
+        rideRepository.updateDriverStatus(region, nearestDriverId, DriverStatus.ON_RIDE);
 
         return ride;
     }
 
 
     @Override
-    public Ride endRide(String rideId) {
-        String consistency = ConsistencyContext.getConsistencyLevel();
-        Ride ride = rideRepository.findById(rideId, consistency);
-        if (ride == null){
+    public Ride endRide(Region region, String rideId) {
+        // Write operations should always use STRONG consistency.
+        ConsistencyLevel consistency = ConsistencyLevel.STRONG;
+        Ride ride = rideRepository.findById(region, rideId, consistency);
+        if (ride == null) {
             throw new RideNotFoundException("Ride not found with ID: " + rideId);
         }
-        if(ride.getStatus().equals("completed")){
-            throw new RideNotFoundException("Ride already completed with ID: " + rideId);
+        if (RideStatus.COMPLETED.equals(ride.getStatus())) {
+            throw new AlreadyExistsException("Ride already completed with ID: " + rideId);
         }
 
-        ride.setStatus("completed");
+        ride.setStatus(RideStatus.COMPLETED);
         ride.setEndTime(System.currentTimeMillis());
-        rideRepository.save(ride);
+        rideRepository.save(region, ride);
 
-        // Free up passenger
-        Passenger passenger = passengerRepository.findById(ride.getPassengerId(), consistency);
-        if (passenger != null) {
-            passenger.setStatus("online");
-            passengerRepository.save(passenger);
-        }
-
-        // Free up driver
-        rideRepository.updateDriverStatus(ride.getDriverId(), "available");
+        passengerRepository.updatePassengerStatus(region, ride.getPassengerId(), PassengerStatus.ONLINE);
+        rideRepository.updateDriverStatus(region, ride.getDriverId(), DriverStatus.AVAILABLE);
 
         return ride;
     }
 
     @Override
     public List<Ride> getAllRides() {
-        String consistency = ConsistencyContext.getConsistencyLevel();
-        return rideRepository.findAll(consistency);
+        Region region = RegionContext.getRegion();
+        ConsistencyLevel consistencyLevel = ConsistencyContext.getConsistencyLevel();
+        return rideRepository.findAll(region, consistencyLevel);
+    }
+
+    @Override
+    public Ride getRideById(String rideId) {
+        Region region = RegionContext.getRegion();
+        ConsistencyLevel consistencyLevel = ConsistencyContext.getConsistencyLevel();
+        return rideRepository.findById(region, rideId, consistencyLevel);
     }
 }

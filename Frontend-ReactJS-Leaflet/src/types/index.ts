@@ -1,25 +1,30 @@
+export type Region = 'US' | 'EU' | 'ASIA';
+
+export type DriverStatus = 'AVAILABLE' | 'ON_RIDE' | 'OFFLINE';
+export type PassengerStatus = 'ONLINE' | 'ON_RIDE'| 'OFFLINE';
+export type RideStatus = 'ONGOING' | 'COMPLETED' | 'CANCELLED';
+
 export interface Driver {
-  id : string;
+  id: string;
   name: string;
-  status : string;
+  status: DriverStatus;
   latitude: number;
   longitude: number;
 }
 
 export interface Passenger {
-  id : string;
+  id: string;
   name: string;
-  status: string;
+  status: PassengerStatus;
   latitude: number;
   longitude: number;
 }
-
 
 export interface Ride {
   id: string;
   passengerId: string;
   driverId: string;
-  status: string;
+  status: RideStatus;
   startTime: number;
   endTime?: number;
 }

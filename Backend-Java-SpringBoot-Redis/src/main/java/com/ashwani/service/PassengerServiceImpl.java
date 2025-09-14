@@ -1,8 +1,11 @@
 package com.ashwani.service;
 
-import com.ashwani.config.ConsistencyContext;
 import com.ashwani.entity.Passenger;
+import com.ashwani.enums.ConsistencyLevel;
+import com.ashwani.enums.Region;
 import com.ashwani.repository.PassengerRepository;
+import com.ashwani.sharding.ConsistencyContext;
+import com.ashwani.sharding.RegionContext;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -15,13 +18,13 @@ public class PassengerServiceImpl implements PassengerService {
     private PassengerRepository passengerRepository;
 
     @Override
-    public void addPassenger(Passenger passenger) {
-        passengerRepository.save(passenger);
+    public void addPassenger(Region region, Passenger passenger) {
+        passengerRepository.save(region, passenger);
     }
 
     @Override
     public List<Passenger> getAllPassengers() {
-        String consistency = ConsistencyContext.getConsistencyLevel();
-        return passengerRepository.findAll(consistency);
+        ConsistencyLevel consistencyLevel = ConsistencyContext.getConsistencyLevel();
+        return passengerRepository.findAll(RegionContext.getRegion(), consistencyLevel);
     }
 }

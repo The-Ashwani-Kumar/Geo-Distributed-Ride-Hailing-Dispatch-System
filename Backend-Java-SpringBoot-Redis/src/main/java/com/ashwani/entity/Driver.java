@@ -1,5 +1,6 @@
 package com.ashwani.entity;
 
+import com.ashwani.enums.DriverStatus;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
@@ -9,10 +10,10 @@ public class Driver {
 
     @NotNull(message = "Name cannot be null")
     private String name;
-    private String status;     // "available" | "on_ride" | "offline"
+    private DriverStatus status;
 
     @NotNull(message = "Latitude cannot be null")
-    private Double latitude;   // Current location (for Redis GEO)
+    private Double latitude;
 
     @NotNull(message = "Longitude cannot be null")
     private Double longitude;

@@ -5,11 +5,14 @@ import DriverForm from "./DriverForm";
 import PassengerForm from "./PassengerForm";
 import RideList from "./RideList";
 import RandomUserGenerator from "./RandomUserGenerator";
+import { Region } from "../types";
 
 const SideBar = () => {
   const {
     consistencyLevel,
-    setConsistencyLevel
+    setConsistencyLevel,
+    region,
+    setRegion,
   } = useRideContext();
   const [showDriver, setShowDriver] = useState(false);
   const [showPassenger, setShowPassenger] = useState(false);
@@ -17,6 +20,22 @@ const SideBar = () => {
 
   // For mobile drawer
   const [showMenu, setShowMenu] = useState(false);
+
+  const regionSelector = (
+    <div className="p-2 rounded bg-light border mt-4">
+      <Form.Group controlId="region-select">
+        <Form.Label className="fw-bold">Region</Form.Label>
+        <Form.Select
+          value={region}
+          onChange={(e) => setRegion(e.target.value as Region)}
+        >
+          <option value="US">US</option>
+          <option value="EU">EU</option>
+          <option value="ASIA">ASIA</option>
+        </Form.Select>
+      </Form.Group>
+    </div>
+  );
 
   const consistencyToggle = (
     <div className="p-2 rounded bg-light border mt-4">
@@ -26,20 +45,20 @@ const SideBar = () => {
         label={
           <div className="ms-2">
             <strong className="d-block">
-              {consistencyLevel === "strong"
+              {consistencyLevel === "STRONG"
                 ? "Strong Consistency"
                 : "Eventual Consistency"}
             </strong>
             <small className="text-muted">
-              {consistencyLevel === "strong"
+              {consistencyLevel === "STRONG"
                 ? "Slower, guaranteed reads"
                 : "Faster, risk of stale data"}
             </small>
           </div>
         }
-        checked={consistencyLevel === "strong"}
+        checked={consistencyLevel === "STRONG"}
         onChange={(e) => {
-          setConsistencyLevel(e.target.checked ? "strong" : "eventual");
+          setConsistencyLevel(e.target.checked ? "STRONG" : "EVENTUAL");
         }}
       />
     </div>
@@ -81,6 +100,7 @@ const SideBar = () => {
           All Rides
         </Button>
 
+        {regionSelector}
         {consistencyToggle}
 
         <div className="mt-auto w-100">
@@ -145,6 +165,7 @@ const SideBar = () => {
             All Rides
           </Button>
 
+          {regionSelector}
           {consistencyToggle}
 
           <div className="mt-auto w-100">

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import { Button } from "react-bootstrap";
 import { toast, ToastContainer } from "react-toastify";
 import {
@@ -41,7 +41,7 @@ const getDistance = (
   const toRad = (deg: number) => (deg * Math.PI) / 180;
   const φ1 = toRad(lat1);
   const φ2 = toRad(lat2);
-  const Δφ = toRad(lat2 - lat1);
+  const Δφ = toRad(lon2 - lon1);
   const Δλ = toRad(lon2 - lon1);
 
   const a =
@@ -94,6 +94,9 @@ const MapView: React.FC = () => {
     rides,
     setRides,
     currentLocation,
+    region, // Get region from context
+    registerFetchData,
+    unregisterFetchData,
   } = useRideContext();
 
   const mapRef = useRef<L.Map | null>(null);
@@ -113,7 +116,7 @@ const MapView: React.FC = () => {
   ) => {
     const newPaths: Record<string, [number, number][]> = {};
     for (const ride of fetchedRides) {
-      if (ride.status === "completed" || ride.status === "cancelled") continue;
+      if (ride.status === "COMPLETED" || ride.status === "CANCELLED") continue;
 
       const passenger = fetchedPassengers.find(
         (p) => p.id === ride.passengerId
@@ -131,11 +134,21 @@ const MapView: React.FC = () => {
   };
 
   // Fetch data from the server
-const fetchData = async () => {
+  const fetchData = useCallback(async () => {
+    console.log(`MapView: Fetching data for region: ${region}`); // Log region
     try {
+      // Explicitly clear state before fetching new data
+      setDrivers([]);
+      setPassengers([]);
+      setRides([]);
+
       const fetchedDrivers = await getDrivers();
       const fetchedPassengers = await getPassengers();
       const fetchedRides = await getRides();
+
+      console.log("MapView: Fetched Drivers:", fetchedDrivers); // Log fetched data
+      console.log("MapView: Fetched Passengers:", fetchedPassengers);
+      console.log("MapView: Fetched Rides:", fetchedRides);
 
       setPassengers(fetchedPassengers);
       setRides(fetchedRides);
@@ -143,10 +156,10 @@ const fetchData = async () => {
     } catch (err) {
       toast.error("Failed to fetch data from the server.");
     }
-  };
+  }, [setPassengers, setRides, setDrivers, region]); // Keep region in dependencies for useCallback
 
   // End ride manually or auto
-  const handleEndRide = async (rideId: string) => {
+  const handleEndRide = useCallback(async (rideId: string) => {
     try {
       await endRide(rideId);
       toast.success("Ride ended");
@@ -155,14 +168,14 @@ const fetchData = async () => {
     } catch (err: any) {
       toast.error(err.message || "Failed to end ride");
     }
-  };
+  }, [fetchData]);
 
   // Effect to handle smooth driver movement
   useEffect(() => {
     const movementInterval = setInterval(() => {
       setDrivers((prevDrivers) => {
         return prevDrivers.map((driver) => {
-          if (driver.status === "on_ride") {
+          if (driver.status === "ON_RIDE") {
             const ride = rides.find((r) => r.driverId === driver.id);
             if (!ride) return driver; // no ride, skip
 
@@ -192,7 +205,7 @@ const fetchData = async () => {
             return { ...driver, latitude: newLat, longitude: newLon };
           }
 
-          if (driver.status === "available") {
+          if (driver.status === "AVAILABLE") {
             const [newLat, newLon] = generateNewLocation(
               driver.latitude,
               driver.longitude
@@ -204,7 +217,7 @@ const fetchData = async () => {
       });
     }, 3000);
     return () => clearInterval(movementInterval);
-  }, [rides, drivers,passengers, setDrivers, setPassengers, setRides]);
+  }, [rides, drivers, passengers, setDrivers, fetchData, handleEndRide]);
 
   // Effect to check for automatic end-ride condition
   useEffect(() => {
@@ -213,7 +226,7 @@ const fetchData = async () => {
         // console.log("Checking ride: " + ride.id + " status: " + ride.status);
         const driver = drivers.find((d) => d.id === ride.driverId);
         const passenger = passengers.find((p) => p.id === ride.passengerId);
-        if (driver && passenger && ride.status === "ongoing") {
+        if (driver && passenger && ride.status === "ONGOING") {
           console.log(driver, passenger, ride);
           const distance = getDistance(
             driver.latitude,
@@ -221,7 +234,7 @@ const fetchData = async () => {
             passenger.latitude,
             passenger.longitude
           );
-          // console.log(driver.name + " distance to passenger: " + distance);
+          // console.log("driver.name + \" distance to passenger: \" + distance);
           if (distance < 20) {
             // console.log("driver came less than 20 meters : " + driver.name);
             handleEndRide(ride.id);
@@ -232,13 +245,19 @@ const fetchData = async () => {
 
     const interval = setInterval(checkAutoEndRide, 3000);
     return () => clearInterval(interval);
-  }, [drivers, passengers, rides]);
+  }, [drivers, passengers, rides, handleEndRide]);
 
   useEffect(() => {
-    fetchData();
-    // const interval = setInterval(fetchData, 10000);
-    // return () => clearInterval(interval);
-  }, []);
+    fetchData(); // Initial fetch
+    registerFetchData(fetchData); // Register fetch function
+
+    // Removed: const interval = setInterval(fetchData, 5000);
+
+    return () => {
+      // Removed: clearInterval(interval);
+      unregisterFetchData(fetchData); // Unregister fetch function on unmount
+    };
+  }, [fetchData, registerFetchData, unregisterFetchData]);
 
   useEffect(() => {
     buildRidePaths(rides, drivers, passengers);
@@ -328,13 +347,13 @@ const fetchData = async () => {
                   key={driver.id}
                   position={[driver.latitude, driver.longitude]}
                   icon={
-                    driver.status === "available" ? driverOffIcon : driverOnIcon
+                    driver.status === "AVAILABLE" ? driverOffIcon : driverOnIcon
                   }
                 >
                   <Popup>
                     <div className="flex align-items-center justify-content-center gap-2">
                       <div className="m-2">Hi, {driver.name} here!</div>
-                      {driver.status === "on_ride" && (
+                      {driver.status === "ON_RIDE" && (
                         <Button
                           variant="danger"
                           size="sm"
@@ -363,7 +382,7 @@ const fetchData = async () => {
                   key={passenger.id}
                   position={[passenger.latitude, passenger.longitude]}
                   icon={
-                    passenger.status === "online"
+                    passenger.status === "ONLINE"
                       ? passengerOffIcon
                       : passengerOnIcon
                   }
@@ -371,7 +390,7 @@ const fetchData = async () => {
                   <Popup>
                     <div className="flex align-items-center justify-content-center gap-2">
                       <div className="m-2">Hi, {passenger.name} here!</div>
-                      {passenger.status === "online" ? (
+                      {passenger.status === "ONLINE" ? (
                         <Button
                           onClick={() => handleRideBooking(passenger.id)}
                         >

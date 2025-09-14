@@ -1,0 +1,93 @@
+version: '3.8'
+
+services:
+  frontend:
+    build:
+      context: ./Frontend-ReactJS-Leaflet
+      dockerfile: Dockerfile
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - ride-hailing-network
+
+  backend:
+    build:
+      context: ./Backend-Java-SpringBoot-Redis
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    depends_on:
+      - redis-us-master
+      - redis-us-slave
+      - redis-eu-master
+      - redis-eu-slave
+      - redis-asia-master
+      - redis-asia-slave
+    networks:
+      - ride-hailing-network
+
+  # US Region Redis
+  redis-us-master:
+    image: redis:6.2-alpine
+    container_name: redis-us-master
+    ports:
+      - "6379:6379"
+    networks:
+      - ride-hailing-network
+
+  redis-us-slave:
+    image: redis:6.2-alpine
+    container_name: redis-us-slave
+    command: ["redis-server", "--replicaof", "redis-us-master", "6379"]
+    ports:
+      - "6380:6379" # Map to a different host port
+    depends_on:
+      - redis-us-master
+    networks:
+      - ride-hailing-network
+
+  # EU Region Redis
+  redis-eu-master:
+    image: redis:6.2-alpine
+    container_name: redis-eu-master
+    ports:
+      - "6381:6379"
+    networks:
+      - ride-hailing-network
+
+  redis-eu-slave:
+    image: redis:6.2-alpine
+    container_name: redis-eu-slave
+    command: ["redis-server", "--replicaof", "redis-eu-master", "6379"]
+    ports:
+      - "6382:6379"
+    depends_on:
+      - redis-eu-master
+    networks:
+      - ride-hailing-network
+
+  # ASIA Region Redis
+  redis-asia-master:
+    image: redis:6.2-alpine
+    container_name: redis-asia-master
+    ports:
+      - "6383:6379"
+    networks:
+      - ride-hailing-network
+
+  redis-asia-slave:
+    image: redis:6.2-alpine
+    container_name: redis-asia-slave
+    command: ["redis-server", "--replicaof", "redis-asia-master", "6379"]
+    ports:
+      - "6384:6379"
+    depends_on:
+      - redis-asia-master
+    networks:
+      - ride-hailing-network
+
+networks:
+  ride-hailing-network:
+    driver: bridge

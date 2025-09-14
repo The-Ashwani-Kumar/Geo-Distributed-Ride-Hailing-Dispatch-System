@@ -1,5 +1,5 @@
 // src/services/consistencyManager.ts
-export type ConsistencyLevel = 'strong' | 'eventual';
+export type ConsistencyLevel = 'STRONG' | 'EVENTUAL';
 
 interface ConsistencyManager {
   level: ConsistencyLevel;
@@ -12,7 +12,7 @@ interface ConsistencyManager {
 const subscribers = new Set<(level: ConsistencyLevel) => void>();
 
 export const consistencyManager: ConsistencyManager = {
-  level: 'strong', // Default consistency level
+  level: 'STRONG', // Default consistency level
 
   get() {
     return this.level;

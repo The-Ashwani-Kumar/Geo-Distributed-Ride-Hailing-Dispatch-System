@@ -2,8 +2,10 @@
 import axios, { AxiosError } from "axios";
 import { Driver, Passenger, Ride } from "../types";
 import { consistencyManager } from "./consistencyManager";
+import { regionManager } from "./regionManager";
 
-const API_URL = "http://localhost:8080";
+// Change this to '/api' when running with Docker Compose and Nginx proxy
+const API_URL = "/api";
 
 const api = axios.create({
   baseURL: API_URL,
@@ -12,12 +14,18 @@ const api = axios.create({
   },
 });
 
-// Request interceptor to add consistency header
+// Request interceptor to add consistency and region headers
 api.interceptors.request.use(
   (config) => {
-    const level = consistencyManager.get();
-    // Attach the header to all requests
-    config.headers["X-Consistency-Level"] = level;
+    const region = regionManager.get();
+    config.headers["X-Region"] = region;
+
+    // Attach the consistency header only to read operations (GET requests)
+    if (config.method === "get") {
+      const level = consistencyManager.get();
+      config.headers["X-Consistency-Level"] = level;
+    }
+
     return config;
   },
   (error) => {

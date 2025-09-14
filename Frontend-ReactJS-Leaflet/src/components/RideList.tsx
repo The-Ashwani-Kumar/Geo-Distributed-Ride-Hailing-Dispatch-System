@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { getDrivers, getPassengers, getRides, endRide } from "../services/api";
 import { useRideContext } from "../context/RideContext";
 import "bootstrap-icons/font/bootstrap-icons.css";
@@ -7,18 +7,28 @@ import { Ride } from "../types";
 import { toast, ToastContainer } from "react-toastify";
 
 const RideList: React.FC = () => {
-  const { rides, setDrivers, setPassengers, setRides } =
+  const { rides, setDrivers, setPassengers, setRides, region, registerFetchData, unregisterFetchData } = // Get region from context
     useRideContext();
   const [loading, setLoading] = useState(false);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
   // Fetch rides
-  const fetchRides = async () => {
+  const fetchRides = useCallback(async () => {
+    console.log(`RideList: Fetching data for region: ${region}`); // Log region
     setLoading(true);
     try {
+      // Explicitly clear state before fetching new data
+      setDrivers([]);
+      setPassengers([]);
+      setRides([]);
+
       const fetchedDrivers = await getDrivers();
       const fetchedPassengers = await getPassengers();
       const fetchedRides = await getRides();
+
+      console.log("RideList: Fetched Drivers:", fetchedDrivers); // Log fetched data
+      console.log("RideList: Fetched Passengers:", fetchedPassengers);
+      console.log("RideList: Fetched Rides:", fetchedRides);
 
       setPassengers(fetchedPassengers);
       setRides(fetchedRides);
@@ -27,13 +37,19 @@ const RideList: React.FC = () => {
       toast.error("Failed to fetch data from the server.");
     }
     setLoading(false);
-  };
+  }, [setDrivers, setPassengers, setRides, region]); // Keep region in dependencies for useCallback
 
   useEffect(() => {
-    fetchRides();
-    const interval = setInterval(fetchRides, 5000);
-    return () => clearInterval(interval);
-  }, []);
+    fetchRides(); // Initial fetch
+    registerFetchData(fetchRides); // Register fetch function
+
+    // Removed: const interval = setInterval(fetchRides, 5000);
+
+    return () => {
+      // Removed: clearInterval(interval);
+      unregisterFetchData(fetchRides); // Unregister fetch function on unmount
+    };
+  }, [fetchRides, registerFetchData, unregisterFetchData]);
 
   // End ride
   const handleEndRide = async (rideId: string) => {
@@ -133,12 +149,12 @@ const RideList: React.FC = () => {
                 <td>
                   <button
                     className={`btn btn-sm btn-${
-                      ride.status === "completed" ? "success" : "danger"
+                      ride.status === "COMPLETED" ? "success" : "danger"
                     }`}
                     onClick={() => handleEndRide(ride.id)}
-                    disabled={ride.status === "completed"}
+                    disabled={ride.status === "COMPLETED"}
                   >
-                    {ride.status === "completed"
+                    {ride.status === "COMPLETED"
                       ? "Ride Completed"
                       : "End Ride"}
                   </button>

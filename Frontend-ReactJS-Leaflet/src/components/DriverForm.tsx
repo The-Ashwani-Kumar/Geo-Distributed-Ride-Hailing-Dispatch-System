@@ -1,13 +1,12 @@
 // src/components/DriverForm.tsx
 import React, { useState } from "react";
 import { useRideContext } from "../context/RideContext";
-import { Button, Form, Spinner, Toast } from "react-bootstrap";
+import { Button, Form, Spinner } from "react-bootstrap";
 import { MapContainer, TileLayer, Marker, useMapEvents } from "react-leaflet";
 import "../styles/Form.css";
 import { addDriver } from "../services/api";
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css"; 
-import { Navigate, useNavigate } from "react-router";
 
 const LocationPicker = ({
   onSelect,

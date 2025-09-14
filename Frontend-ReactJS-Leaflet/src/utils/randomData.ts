@@ -30,7 +30,7 @@ export const generateRandomDrivers = (
       name: `Driver_${i + 1}`,
       latitude: lat,
       longitude: lon,
-      status: "available",
+      status: "AVAILABLE",
     });
   }
   return drivers;
@@ -50,7 +50,7 @@ export const generateRandomPassengers = (
       name: `Passenger_${i + 1}`,
       latitude: lat,
       longitude: lon,
-      status: "online",
+      status: "ONLINE",
     });
   }
   return passengers;

@@ -11,11 +11,12 @@ import { toast, ToastContainer } from "react-toastify";
 import { point, multiPolygon } from "@turf/helpers";
 import { booleanPointInPolygon } from "@turf/boolean-point-in-polygon";
 import landData from "../data/world_land.json";
+import { Driver, Passenger } from "../types";
 
 const MAX_RETRIES = 20;
 
 const RandomUserGenerator: React.FC = () => {
-  const { currentLocation, setDrivers, setPassengers } = useRideContext();
+  const { currentLocation, refreshData } = useRideContext(); // Added refreshData
 
   const [numDrivers, setNumDrivers] = useState(5);
   const [numPassengers, setNumPassengers] = useState(5);
@@ -68,39 +69,33 @@ const RandomUserGenerator: React.FC = () => {
     const driverCoords = await generateLandCoordinates(numDrivers, true);
     const passengerCoords = await generateLandCoordinates(numPassengers, false);
 
-    const newDrivers = driverCoords.map(([lat, lon], i) => ({
+    const newDrivers = driverCoords.map(([lat, lon], i): Driver => ({
       id: uuidv4(),
       name: `Driver_${i + 1}`,
       latitude: lat,
       longitude: lon,
-      status: "available",
+      status: "AVAILABLE",
     }));
 
-    const newPassengers = passengerCoords.map(([lat, lon], i) => ({
+    const newPassengers = passengerCoords.map(([lat, lon], i): Passenger => ({
       id: uuidv4(),
       name: `Passenger_${i + 1}`,
       latitude: lat,
       longitude: lon,
-      status: "online",
+      status: "ONLINE",
     }));
 
     try {
       await Promise.all(newDrivers.map((driver) => addDriver(driver)));
-      setDrivers((prev) => [...prev, ...newDrivers]);
-
       await Promise.all(
         newPassengers.map((passenger) => addPassenger(passenger))
       );
-      setPassengers((prev) => [...prev, ...newPassengers]);
 
       toast.success("Random Drivers and Passengers added!");
+      refreshData(); // Call refreshData after successful additions
     } catch (err) {
       console.error(err);
       toast.error("Error adding Random Drivers and Passengers");
-    }
-    finally{
-      setDrivers((prev) => [...prev, ...newDrivers]);
-      setPassengers((prev) => [...prev, ...newPassengers]);
     }
   };
 

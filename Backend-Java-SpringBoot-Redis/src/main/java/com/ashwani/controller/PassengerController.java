@@ -1,7 +1,9 @@
 package com.ashwani.controller;
 
 import com.ashwani.entity.Passenger;
+import com.ashwani.enums.PassengerStatus;
 import com.ashwani.service.PassengerService;
+import com.ashwani.sharding.RegionContext;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -24,8 +26,8 @@ public class PassengerController {
         if (passenger.getId() == null || passenger.getId().isEmpty()) {
             passenger.setId(UUID.randomUUID().toString());
         }
-        passenger.setStatus("online");
-        passengerService.addPassenger(passenger);
+        passenger.setStatus(PassengerStatus.ONLINE);
+        passengerService.addPassenger(RegionContext.getRegion(), passenger);
         return ResponseEntity.ok(passenger);
     }
 
@@ -34,4 +36,3 @@ public class PassengerController {
         return ResponseEntity.ok(passengerService.getAllPassengers());
     }
 }
-

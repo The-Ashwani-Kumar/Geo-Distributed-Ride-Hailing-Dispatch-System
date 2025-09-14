@@ -1,8 +1,11 @@
 package com.ashwani.service;
 
-import com.ashwani.config.ConsistencyContext;
 import com.ashwani.entity.Driver;
+import com.ashwani.enums.ConsistencyLevel;
+import com.ashwani.enums.Region;
 import com.ashwani.repository.DriverRepository;
+import com.ashwani.sharding.ConsistencyContext;
+import com.ashwani.sharding.RegionContext;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -15,8 +18,8 @@ public class DriverServiceImpl implements DriverService {
     private DriverRepository driverRepository;
 
     @Override
-    public void addDriver(Driver driver) {
-        driverRepository.saveDriver(driver);
+    public void addDriver(Region region, Driver driver) {
+        driverRepository.saveDriver(region, driver);
         try {
             // Simulate replication lag
             Thread.sleep(5000);
@@ -26,13 +29,13 @@ public class DriverServiceImpl implements DriverService {
     }
 
     @Override
-    public void updateDriverLocation(String id, Double longitude, Double latitude) {
-        driverRepository.updateDriverLocation(id, longitude, latitude);
+    public void updateDriverLocation(Region region, String id, Double longitude, Double latitude) {
+        driverRepository.updateDriverLocation(region, id, longitude, latitude);
     }
 
     @Override
     public List<Driver> getAllDrivers() {
-        String consistency = ConsistencyContext.getConsistencyLevel();
-        return driverRepository.findAllDrivers(consistency);
+        ConsistencyLevel consistencyLevel = ConsistencyContext.getConsistencyLevel();
+        return driverRepository.findAllDrivers(RegionContext.getRegion(), consistencyLevel);
     }
 }

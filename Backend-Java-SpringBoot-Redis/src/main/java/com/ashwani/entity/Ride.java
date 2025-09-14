@@ -1,5 +1,6 @@
 package com.ashwani.entity;
 
+import com.ashwani.enums.RideStatus;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
@@ -13,8 +14,7 @@ public class Ride {
     @NotNull(message = "Driver ID cannot be null")
     private String driverId;    // Linked driver
 
-    private String status;      // "ongoing" | "completed" | "cancelled"
+    private RideStatus status;  // "ongoing" | "completed" | "cancelled"
     private Long startTime;
     private Long endTime;       // Nullable if ride still ongoing
 }
-

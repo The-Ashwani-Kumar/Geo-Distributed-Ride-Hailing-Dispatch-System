@@ -1,7 +1,9 @@
 package com.ashwani.controller;
 
 import com.ashwani.entity.Driver;
+import com.ashwani.enums.DriverStatus;
 import com.ashwani.service.DriverService;
+import com.ashwani.sharding.RegionContext;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -24,14 +26,14 @@ public class DriverController {
             driver.setId(UUID.randomUUID().toString());
         }
 
-        driver.setStatus("available");
-        driverService.addDriver(driver);
+        driver.setStatus(DriverStatus.AVAILABLE);
+        driverService.addDriver(RegionContext.getRegion(), driver);
         return ResponseEntity.ok(driver);
     }
 
     @PostMapping("/updateLocation")
     public void updateDriverLocation(@RequestParam String id, @RequestParam Double longitude, @RequestParam Double latitude) {
-        driverService.updateDriverLocation(id, longitude, latitude);
+        driverService.updateDriverLocation(RegionContext.getRegion(), id, longitude, latitude);
     }
 
     @GetMapping
@@ -39,4 +41,3 @@ public class DriverController {
         return ResponseEntity.ok(driverService.getAllDrivers());
     }
 }
-

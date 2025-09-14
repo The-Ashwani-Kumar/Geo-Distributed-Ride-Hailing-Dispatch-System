@@ -1,5 +1,6 @@
 package com.ashwani.entity;
 
+import com.ashwani.enums.PassengerStatus;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
@@ -10,10 +11,10 @@ public class Passenger {
     @NotNull(message = "Name cannot be null")
     private String name;
 
-    private String status;     // "online" | "on_ride" | "offline"
+    private PassengerStatus status;
 
     @NotNull(message = "Latitude cannot be null")
-    private Double latitude;   // Current location (for Redis GEO)
+    private Double latitude;
 
     @NotNull(message = "Longitude cannot be null")
     private Double longitude;
